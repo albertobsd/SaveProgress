@@ -71,17 +71,30 @@ SaveProgress::SaveProgress(const char *prefixfilename,bool ram, Int *range_start
 		fprintf(stderr,"[E] Can't reopen the file\n");
 		exit(EXIT_FAILURE);
 	}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	mutex = CreateMutex(NULL, FALSE, NULL);
+	if(mutex == NULL)	{
+		fprintf(stderr,"[E] Error CreateMutex\n");
+		exit(EXIT_FAILURE);
+	}
+#else
 	mutex =(pthread_mutex_t*) calloc(1,sizeof(pthread_mutex_t));
 	if(mutex == NULL)	{
 		fprintf(stderr,"[E] Error Calloc\n");
 		exit(EXIT_FAILURE);
 	}
 	pthread_mutex_init(mutex,NULL);
+#endif
 }
 
 SaveProgress::~SaveProgress()	{
 	fclose(filedescriptor);
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	CloseHandle(mutex);
+#else
 	pthread_mutex_destroy(mutex);
+#endif
+	
 	if(save_ram)	{
 		if(data_reserved != NULL)	{
 			free(data_reserved);
@@ -96,7 +109,6 @@ SaveProgress::~SaveProgress()	{
 	if(filename != NULL)	{
 		free(filename);
 	}
-	mutex = NULL;
 }
 
 void SaveProgress::CalculateItems()	{
@@ -292,8 +304,11 @@ bool SaveProgress::CompleteSubrange(Int *subrange)	{
 	bit = diff.GetInt64();
 	byte = bit >> 3;
 	mask = 1 << (bit % 8);
-	
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	WaitForSingleObject(mutex, INFINITE);
+#else
 	pthread_mutex_lock(mutex);
+#endif
 	if(save_ram)	{
 		current = data_complete[byte];
 	}
@@ -310,7 +325,11 @@ bool SaveProgress::CompleteSubrange(Int *subrange)	{
 		items_complete_used++;
 		UpdateFileCompleteSubrange(byte,value);
 	}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	ReleaseMutex(mutex);
+#else
 	pthread_mutex_unlock(mutex);
+#endif
 	return true;
 }
 
@@ -326,7 +345,6 @@ void SaveProgress::UpdateFileCompleteSubrange(uint64_t byte, uint8_t value)	{
 		fclose(filedescriptor);
 		exit(EXIT_FAILURE);
 	}
-	
 	
 	uint64_t offset = OFFSET_FILE_DATASETS + length +byte;
 	if(fseek(filedescriptor,offset,SEEK_SET) != 0)	{
@@ -354,7 +372,12 @@ bool SaveProgress::ReserveSubrange(Int *subrange)	{
 	byte = bit >> 3;
 	mask = 1 << (bit % 8);
 	
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	WaitForSingleObject(mutex, INFINITE);
+#else
 	pthread_mutex_lock(mutex);
+#endif
+	
 	if(save_ram)	{
 		current = data_reserved[byte];
 	}
@@ -373,7 +396,11 @@ bool SaveProgress::ReserveSubrange(Int *subrange)	{
 		items_reserved_used++;
 		UpdateFileReserveSubrange(byte,value);
 	}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	ReleaseMutex(mutex);
+#else
 	pthread_mutex_unlock(mutex);
+#endif
 	return true;
 }
 
@@ -582,17 +609,31 @@ bool SaveProgress::CheckAndReserveSubrange(Int *subrange)	{
 	mask = 1 << (bit % 8);
 	if(save_ram)	{
 		//The data should be on RAM
+		
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		WaitForSingleObject(mutex, INFINITE);
+#else
 		pthread_mutex_lock(mutex);
+#endif
+		
 		current = data_reserved[byte];
 		if(!(current & mask))	{
 			value = current | mask;
 			data_reserved[byte] = value;
 			UpdateFileReserveSubrange(byte,value);
+#if defined(_WIN64) && !defined(__CYGWIN__)
+			ReleaseMutex(mutex);
+#else
 			pthread_mutex_unlock(mutex);
+#endif
 			return true;
 		}
 		else	{
+#if defined(_WIN64) && !defined(__CYGWIN__)
+			ReleaseMutex(mutex);
+#else
 			pthread_mutex_unlock(mutex);
+#endif
 			return false;
 		}
 	}
@@ -604,16 +645,23 @@ bool SaveProgress::CheckAndReserveSubrange(Int *subrange)	{
 		if(!(current & mask))	{
 			value = current | mask;
 			UpdateFileReserveSubrange(byte,value);
+#if defined(_WIN64) && !defined(__CYGWIN__)
+			ReleaseMutex(mutex);
+#else
 			pthread_mutex_unlock(mutex);
+#endif
 			return true;
 		}
 		else{
+#if defined(_WIN64) && !defined(__CYGWIN__)
+			ReleaseMutex(mutex);
+#else
 			pthread_mutex_unlock(mutex);
+#endif
 			return false;
 		}
 	}
 }
-
 
 bool SaveProgress::CheckReservedSubrange(Int *subrange)	{
 	uint64_t bit;
@@ -627,15 +675,27 @@ bool SaveProgress::CheckReservedSubrange(Int *subrange)	{
 	mask = 1 << (bit % 8);
 	if(save_ram)	{
 		//The data should be on RAM
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		WaitForSingleObject(mutex, INFINITE);
+#else
 		pthread_mutex_lock(mutex);
+#endif
 		current = data_reserved[byte];
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		ReleaseMutex(mutex);
+#else
 		pthread_mutex_unlock(mutex);
+#endif
 		return (bool)(current & mask);
 	}
 	else	{
 		//We need to retreive the data from file
 		uint64_t offset  = OFFSET_FILE_DATASETS + byte;
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		WaitForSingleObject(mutex, INFINITE);
+#else
 		pthread_mutex_lock(mutex);
+#endif
 		
 		if(fseek(filedescriptor,offset,SEEK_SET) != 0)	{
 			printf("Failed to seek the file\n");
@@ -645,13 +705,14 @@ bool SaveProgress::CheckReservedSubrange(Int *subrange)	{
 			printf("Failed to update the file\n");
 			exit(EXIT_FAILURE);
 		}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		ReleaseMutex(mutex);
+#else
 		pthread_mutex_unlock(mutex);
+#endif
 		return (bool)(current & mask);
 	}
 }
-
-
-
 
 bool SaveProgress::CheckCompleteSubrange(Int *subrange)	{
 	uint64_t byte,bit;
@@ -664,15 +725,27 @@ bool SaveProgress::CheckCompleteSubrange(Int *subrange)	{
 	mask = 1 << (bit % 8);
 	if(save_ram)	{
 		//The data should be on RAM
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		WaitForSingleObject(mutex, INFINITE);
+#else
 		pthread_mutex_lock(mutex);
+#endif
 		current = data_complete[byte];
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		ReleaseMutex(mutex);
+#else
 		pthread_mutex_unlock(mutex);
+#endif
 		return (bool)(current & mask);
 	}
 	else	{
 		//We need to retreive the data from file
 		uint64_t offset  = OFFSET_FILE_DATASETS +length + byte;
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		WaitForSingleObject(mutex, INFINITE);
+#else
 		pthread_mutex_lock(mutex);
+#endif
 		
 		if(fseek(filedescriptor,offset,SEEK_SET) != 0)	{
 			printf("Failed to seek the file\n");
@@ -682,7 +755,11 @@ bool SaveProgress::CheckCompleteSubrange(Int *subrange)	{
 			printf("Failed to update the file\n");
 			exit(EXIT_FAILURE);
 		}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		ReleaseMutex(mutex);
+#else
 		pthread_mutex_unlock(mutex);
+#endif
 		return (bool)(current & mask);
 	}
 }
@@ -694,11 +771,14 @@ bool SaveProgress::GetAndReserveNextForwardAvailable(Int *subrange)	{
 	}
 	uint64_t byte,bit;
 	uint8_t mask,current,value;
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	WaitForSingleObject(mutex, INFINITE);
+#else
 	pthread_mutex_lock(mutex);
-	subrange->Set(subrange_length);
-	subrange->Mult(last_item_forward_reserve);
-	subrange->Add(range_start);
+#endif
 	if(type)	{	//If type is 1 we need to update the counter and bit in file
+		//INCOMPLETE
+		
 		bit = last_item_forward_reserve;
 		byte = bit >> 3;
 		mask = 1 << (bit % 8);
@@ -720,9 +800,18 @@ bool SaveProgress::GetAndReserveNextForwardAvailable(Int *subrange)	{
 			}
 		}
 	}
-	last_item_forward_reserve++;
-	UpdateLastItemForwardReserve();
+	else{
+		subrange->Set(subrange_length);
+		subrange->Mult(last_item_forward_reserve);
+		subrange->Add(range_start);
+		last_item_forward_reserve++;
+		UpdateLastItemForwardReserve();
+	}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	ReleaseMutex(mutex);
+#else
 	pthread_mutex_unlock(mutex);
+#endif
 	return true;
 }
 
@@ -733,10 +822,12 @@ bool SaveProgress::GetAndReserveNextBackwardAvailable(Int *subrange)	{
 	}
 	uint64_t byte,bit;
 	uint8_t mask,current,value;
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	WaitForSingleObject(mutex, INFINITE);
+#else
 	pthread_mutex_lock(mutex);
-	subrange->Set(subrange_length);
-	subrange->Mult(length - last_item_backward_reserve);
-	subrange->Add(range_start);
+#endif
+
 	if(type)	{	//If type is 1 we need to update the counter and bit in file
 		bit = length - last_item_backward_reserve;
 		byte = bit >> 3;
@@ -759,9 +850,18 @@ bool SaveProgress::GetAndReserveNextBackwardAvailable(Int *subrange)	{
 			}
 		}
 	}
-	last_item_backward_reserve++;
-	UpdateLastItemBackwardReserve();
+	else	{
+		subrange->Set(subrange_length);
+		subrange->Mult(length - last_item_backward_reserve);
+		subrange->Add(range_start);
+		last_item_backward_reserve++;
+		UpdateLastItemBackwardReserve();
+	}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	ReleaseMutex(mutex);
+#else
 	pthread_mutex_unlock(mutex);
+#endif
 	return true;
 }
 
@@ -787,6 +887,16 @@ void SaveProgress::UpdateLastItemForwardReserve()	{
 	}
 }
 
+void SaveProgress::UpdateItemsReservedUsed()	{
+	if(fseek(filedescriptor,OFFSET_FILE_ITEMS_R_USED,SEEK_SET) != 0)	{
+		printf("Failed to seek the file\n");
+		exit(EXIT_FAILURE);
+	}
+	if(fwrite(&items_reserved_used,sizeof(uint64_t),1,filedescriptor) != 1)	{
+		printf("Failed to update the file\n");
+		exit(EXIT_FAILURE);
+	}
+}
 
 bool SaveProgress::GetAndReserveNextRandomAvailable(Int *subrange)	{
 	if(items_reserved_used >= length || type == 0)	{	// There is no random in type 0
@@ -795,9 +905,11 @@ bool SaveProgress::GetAndReserveNextRandomAvailable(Int *subrange)	{
 	}
 	uint64_t byte,bit;
 	uint8_t mask,current,value;
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	WaitForSingleObject(mutex, INFINITE);
+#else
 	pthread_mutex_lock(mutex);
-	
-	
+#endif
 	subrange->Set(subrange_length);
 	subrange->Mult(length - last_item_backward_reserve);
 	subrange->Add(range_start);
@@ -823,10 +935,13 @@ bool SaveProgress::GetAndReserveNextRandomAvailable(Int *subrange)	{
 			}
 		}
 	}
+#if defined(_WIN64) && !defined(__CYGWIN__)
+	ReleaseMutex(mutex);
+#else
 	pthread_mutex_unlock(mutex);
+#endif
 	return true;
 }
-
 
 void SaveProgress::ReadVariablesFromFileName(const char *tempfilename)	{
 	/*
@@ -893,7 +1008,6 @@ void SaveProgress::ReadVariablesFromFileName(const char *tempfilename)	{
 		exit(EXIT_FAILURE);
 	}
 	
-	
 	if(fread(&items_complete_used,sizeof(uint64_t),1,filedescriptor) != 1)	{
 		printf("Failed to read the file\n");
 		fclose(filedescriptor);
@@ -923,15 +1037,12 @@ void SaveProgress::ReadVariablesFromFileName(const char *tempfilename)	{
 		fclose(filedescriptor);
 		exit(EXIT_FAILURE);
 	}
-	
-	
-	
+
 	if(fseek(filedescriptor,OFFSET_FILE_RANGE_START,SEEK_SET) != 0)	{
 		printf("Failed to seek the file\n");
 		fclose(filedescriptor);
 		exit(EXIT_FAILURE);
 	}
-
 
 	if(fread(bufferInt,32,1,filedescriptor) != 1)	{
 		printf("Failed to read the file\n");
@@ -946,14 +1057,15 @@ void SaveProgress::ReadVariablesFromFileName(const char *tempfilename)	{
 		fclose(filedescriptor);
 		exit(EXIT_FAILURE);
 	}
+	
 	range_end->Set32Bytes(bufferInt);
-
 
 	if(fread(bufferInt,32,1,filedescriptor) != 1)	{
 		printf("Failed to read the file\n");
 		fclose(filedescriptor);
 		exit(EXIT_FAILURE);
 	}
+	
 	subrange_length->Set32Bytes(bufferInt);
 
 	/*
@@ -972,7 +1084,6 @@ void SaveProgress::ReadVariablesFromFileName(const char *tempfilename)	{
 	*/
 }
 
-
 void SaveProgress::ShowHeaders()	{
 	char *temp;
 	printf("Magic Bytes: %s\n",magicbytes);
@@ -981,17 +1092,14 @@ void SaveProgress::ShowHeaders()	{
 	printf("Items: %lu\n",items);
 	printf("Length: %lu\n",length);
 	
-	
-	if(type == 0)	{
-		printf("Last item fordward reserve: %lu\n",last_item_forward_reserve);
-		printf("Last item backward reserve: %lu\n",last_item_backward_reserve);		
-		printf("Last item fordward complete: %lu\n",last_item_forward_complete);
-		printf("Last item backward complete: %lu\n",last_item_backward_complete);
-	}
-	else	{
+	if(type == 1)	{
 		printf("Items reserved used: %lu\n",items_reserved_used);
 		printf("Items complete used: %lu\n",items_complete_used);
 	}
+	printf("Last item fordward reserve: %lu\n",last_item_forward_reserve);
+	printf("Last item backward reserve: %lu\n",last_item_backward_reserve);		
+	printf("Last item fordward complete: %lu\n",last_item_forward_complete);
+	printf("Last item backward complete: %lu\n",last_item_backward_complete);
 	
 	temp = range_start->GetBase16();
 	printf("Star range: %s\n",temp);
@@ -1004,11 +1112,11 @@ void SaveProgress::ShowHeaders()	{
 	temp = subrange_length->GetBase16();
 	printf("Length subrange: %s\n",temp);
 	free(temp);
-	
 }
 
-
 void SaveProgress::ShowProgress()	{
+	Int range_from,range_to;
+	char *str_from,*str_to;
 	if(type == 1)	{
 		//Here we need to read the file or the values from ram if save_ram is enable:
 		bool counting_zeros;
@@ -1038,9 +1146,17 @@ void SaveProgress::ShowProgress()	{
 						counting_ones = false;
 						counting_zeros = true;
 						if(total_ones > 0)	{
-							printf("Segment of Ones from %lu to %lu\n",offset,offset+total_ones);
+							CalculateRange(offset,&range_from);
+							CalculateRange(offset+total_ones,&range_to);
+							range_to.Sub(1);
+							str_from = range_from.GetBase16();
+							str_to = range_to.GetBase16();
+							printf("Segment Complete from %s to %s\n",str_from,str_to);
+							free(str_from);
+							free(str_to);
 							total_ones = 0;
 							offset = bit_counter;
+
 						}
 					}
 				} else {
@@ -1049,7 +1165,14 @@ void SaveProgress::ShowProgress()	{
 						counting_ones = true;
 						counting_zeros = false;
 						if(total_zeros > 0)	{
-							printf("Segment of Zeros from %lu to %lu\n",offset,offset+total_zeros);
+							CalculateRange(offset,&range_from);
+							CalculateRange(offset+total_zeros,&range_to);
+							range_to.Sub(1);
+							str_from = range_from.GetBase16();
+							str_to = range_to.GetBase16();
+							printf("Segment NOT Complete from %s to %s\n",str_from,str_to);
+							free(str_from);
+							free(str_to);
 							total_zeros = 0;
 							offset = bit_counter;
 						}
@@ -1058,17 +1181,190 @@ void SaveProgress::ShowProgress()	{
 				bit_counter++;
 			}
 		}
+		
 		if(counting_zeros)	{
-			printf("Segment of Zeros from %lu to %lu\n",offset,offset+total_zeros);
+			CalculateRange(offset,&range_from);
+			CalculateRange(offset+total_zeros,&range_to);
+			range_to.Sub(1);
+			str_from = range_from.GetBase16();
+			str_to = range_to.GetBase16();
+			printf("Segment NOT Complete from %s to %s\n",str_from,str_to);
+			free(str_from);
+			free(str_to);
 		}
 		else	{
-			printf("Segment of Ones from %lu to %lu\n",offset,offset+total_ones);
-			
+			CalculateRange(offset,&range_from);
+			CalculateRange(offset+total_ones,&range_to);
+			range_to.Sub(1);
+			str_from = range_from.GetBase16();
+			str_to = range_to.GetBase16();
+			printf("Segment Complete from %s to %s\n",str_from,str_to);
+			free(str_from);
+			free(str_to);
 		}
-		
 	}
 	else	{
 		//Here we only need to show the Forward and backward values
-		
+		if(last_item_forward_complete > 0)	{
+			if(last_item_forward_complete+ last_item_backward_complete >= items)	{
+				//All range complete
+				str_from = range_start->GetBase16();
+				str_to = range_end->GetBase16();
+				printf("Segment Complete from %s to %s\n",str_from,str_to);
+				free(str_from);
+				free(str_to);
+				return;
+			}
+			else	{
+				CalculateRange(0,&range_from);
+				CalculateRange(last_item_forward_complete,&range_to);
+				range_to.Sub(1);
+				str_from = range_from.GetBase16();
+				str_to = range_to.GetBase16();
+				printf("Segment Complete from %s to %s\n",str_from,str_to);
+				free(str_from);
+				free(str_to);
+				
+				CalculateRange(last_item_forward_complete,&range_from);
+				CalculateRange(items-last_item_backward_complete,&range_to);
+				range_to.Sub(1);
+				str_from = range_from.GetBase16();
+				str_to = range_to.GetBase16();
+				printf("Segment NOT Complete from %s to %s\n",str_from,str_to);
+				free(str_from);
+				free(str_to);
+			}
+		}
+		else{
+			CalculateRange(0,&range_from);
+			CalculateRange(items-last_item_backward_complete,&range_to);
+			range_to.Sub(1);
+			str_from = range_from.GetBase16();
+			str_to = range_to.GetBase16();
+			printf("Segment NOT Complete from %s to %s\n",str_from,str_to);
+			free(str_from);
+			free(str_to);	
+		}
+		if(last_item_forward_complete > 0)	{
+			CalculateRange(items-last_item_backward_complete,&range_from);
+			CalculateRange(items,&range_to);
+			range_to.Sub(1);
+			str_from = range_from.GetBase16();
+			str_to = range_to.GetBase16();
+			printf("Segment Complete from %s to %s\n",str_from,str_to);
+			free(str_from);
+			free(str_to);	
+		}		
+	}
+}
+
+void SaveProgress::CalculateRange(uint64_t offset,Int *range)	{
+	range->Set(subrange_length);
+	range->Mult(offset);
+	range->Add(range_start);	
+}
+
+void SaveProgress::RemoveReservedUncompleted()	{
+	if(type == 1)	{
+		uint8_t bufferReserved[SAVEPROGRESS_BUFFER_LENGTH];
+		uint8_t bufferComplete[SAVEPROGRESS_BUFFER_LENGTH];
+		int current_chunk_size;
+		int number_of_chunks = (int) (length/SAVEPROGRESS_BUFFER_LENGTH);
+		int last_chunk_size = length % SAVEPROGRESS_BUFFER_LENGTH;
+		bool need_update;
+		if(last_chunk_size == 0)	{
+			last_chunk_size = SAVEPROGRESS_BUFFER_LENGTH;
+		}
+		else	{
+			number_of_chunks++;
+		}
+		for(int i = 0; i < number_of_chunks;i++)	{
+			current_chunk_size = (i < number_of_chunks - 1) ? SAVEPROGRESS_BUFFER_LENGTH :last_chunk_size; 
+			offset = i * SAVEPROGRESS_BUFFER_LENGTH;
+			ReadReserved(bufferReserved,offset,current_chunk_size);
+			ReadComplete(bufferComplete,offset,current_chunk_size);
+			need_update = false;
+			for(int j = 0; j < current_chunk_size;  j++)	{
+				if(bufferReserved[j] != bufferComplete[j])	{
+					need_update = true;
+					break;
+				}
+			}
+			if(need_update)	{
+				WriteReserved(bufferReserved,offset,current_chunk_size);
+			}
+		}
+		last_item_forward_reserve = last_item_forward_complete;
+		last_item_backward_reserve = last_item_backward_complete;
+		items_reserved_used = items_complete_used;
+		UpdateItemsReservedUsed();
+		UpdateLastItemForwardReserve();
+		UpdateLastItemBackwardReserve();
+	}
+	else	{
+		last_item_forward_reserve = last_item_forward_complete;
+		last_item_backward_reserve = last_item_backward_complete;
+		UpdateLastItemForwardReserve();
+		UpdateLastItemBackwardReserve();
+	}
+}
+
+void SaveProgress::ReadReserved(uint8_t buffer,uint64_t offset,int size)	{
+	if(save_ram)	{
+		memcpy(buffer,data_reserved + offset,size);
+	}
+	else	{
+		if(fseek(filedescriptor,OFFSET_FILE_DATASETS + offset,SEEK_SET) != 0)	{
+			printf("Failed to seek the file\n");
+			exit(EXIT_FAILURE);
+		}
+		if(fread(buffer,sizeof(uint8_t),size,filedescriptor) != size)	{
+			printf("Failed to read the file\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
+void SaveProgress::ReadComplete(uint8_t buffer,uint64_t offset,int size)	{
+	if(save_ram)	{
+		memcpy(buffer,data_complete + offset,size);
+	}
+	else	{
+		if(fseek(filedescriptor,OFFSET_FILE_DATASETS + length + offset,SEEK_SET) != 0)	{
+			printf("Failed to seek the file\n");
+			exit(EXIT_FAILURE);
+		}
+		if(fread(buffer,sizeof(uint8_t),size,filedescriptor) != size)	{
+			printf("Failed to read the file\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
+void SaveProgress::WriteReserved(uint8_t buffer,uint64_t offset,int size)	{
+	if(fseek(filedescriptor,OFFSET_FILE_DATASETS + offset,SEEK_SET) != 0)	{
+		printf("Failed to seek the file\n");
+		exit(EXIT_FAILURE);
+	}
+	if(fwrite(buffer,sizeof(uint8_t),size,filedescriptor) != size)	{
+		printf("Failed to write the file\n");
+		exit(EXIT_FAILURE);
+	}
+	if(save_ram)	{
+		memcpy(data_reserved + offset,buffer,size);
+	}
+}
+
+void SaveProgress::WriteComplete(uint8_t buffer,uint64_t offset,int size)	{
+	if(fseek(filedescriptor,OFFSET_FILE_DATASETS + length + offset,SEEK_SET) != 0)	{
+		printf("Failed to seek the file\n");
+		exit(EXIT_FAILURE);
+	}
+	if(fwrite(buffer,sizeof(uint8_t),size,filedescriptor) != size)	{
+		printf("Failed to write the file\n");
+		exit(EXIT_FAILURE);
+	}
+	if(save_ram)	{
+		memcpy(data_complete + offset,buffer,size);
 	}
 }

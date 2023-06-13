@@ -46,12 +46,12 @@ public:
 
 	/* Aritmetic*/
 	void Add(const uint64_t);
-	void Add(const uint32_t);
+	//void Add(const uint32_t);
 	void Add(const Int*);
 	void Add(const Int*,const Int*);
 	void AddOne();
 	void Sub(const uint64_t);
-	void Sub(const uint32_t);
+	//void Sub(const uint32_t);
 	void Sub(Int *);
 	void Sub(Int *a, Int *b);
 	void Mult(Int *);

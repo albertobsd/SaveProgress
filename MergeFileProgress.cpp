@@ -21,14 +21,24 @@
 #include "gmp256k1/Random.h"
 #include "SaveProgress.h"
 
-SaveProgress *sp;
+SaveProgress *spA,*spB;
 
 int main(int argc, char **argv)	{
-	if(argc < 2)	{
+	if(argc < 3)	{
 		fprintf(stderr,"Missing argument");
 		exit(EXIT_FAILURE);
 	}
-	sp = new SaveProgress(argv[1]);
-	sp->ShowHeaders();
-	sp->ShowProgress();
+	spA = new SaveProgress(argv[1]);
+	spB = new SaveProgress(argv[2]);
+	/*
+		Here we need to check if the ranges of the files overlaps
+		If they overlaps Merge B in to A
+		This is A <- B
+		or argv[1] <- argv[2]
+		
+		By the momment if type mismatch send error...
+		we can handle that in some future update
+	*/
+	
+	
 }

@@ -25,8 +25,9 @@
 #define OFFSET_FILE_LAST_ITEM_F_C 80
 #define OFFSET_FILE_LAST_ITEM_B_C 88
 #define OFFSET_FILE_RANGE_START 128
-
 #define OFFSET_FILE_DATASETS 224
+
+#define SAVEPROGRESS_BUFFER_LENGTH 524288
 
 class SaveProgress {
 	public:
@@ -75,7 +76,9 @@ class SaveProgress {
 		uint64_t items_complete_used;		//Number of items complete already used
 		
 		/*
-			items_reserved_used and items_completed_used are only used if type == 0
+			last_item_forward_reserve, last_item_backward_reserve
+			last_item_forward_complete and last_item_backward_complete 
+			are used if type is 1 or 0
 		*/
 		uint64_t last_item_forward_reserve;			//Last seen unset item from the beggining
 		uint64_t last_item_backward_reserve;		//Last seen unset item from the ending
@@ -96,7 +99,12 @@ class SaveProgress {
 		
 		char magicbytes[MAGICBYTESLENGTH];  //MagicBytes for file
 		
-		pthread_mutex_t *mutex;		//Mutex for I/O operations RAM and FILE
+		//Mutex for I/O operations RAM and FILE
+#if defined(_WIN64) && !defined(__CYGWIN__)
+		HANDLE mutex;
+#else
+		pthread_mutex_t *mutex;		
+#endif
 
 		void CalculateItems();
 		void InitFile();
@@ -105,11 +113,15 @@ class SaveProgress {
 		void UpdateFileReserveSubrange(uint64_t byte, uint8_t value);
 		void ReadVariablesFromFile();
 		
+		
+		void UpdateItemsReservedUsed();
 		void UpdateLastItemForwardReserve();
 		void UpdateLastItemBackwardReserve();
 		
 		uint8_t ReadByteReserved(uint64_t byte);
 		uint8_t ReadByteComplete(uint64_t byte);
+		
+		void CalculateRange(uint64_t offset,Int *range);
 		
 		void ReadVariablesFromFileName(const char *filename);
 };

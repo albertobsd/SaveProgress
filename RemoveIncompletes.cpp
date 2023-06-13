@@ -29,6 +29,5 @@ int main(int argc, char **argv)	{
 		exit(EXIT_FAILURE);
 	}
 	sp = new SaveProgress(argv[1]);
-	sp->ShowHeaders();
-	sp->ShowProgress();
+	sp->RemoveReservedUncompleted();
 }

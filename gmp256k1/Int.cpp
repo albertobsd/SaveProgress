@@ -70,10 +70,11 @@ void Int::Add(const uint64_t u64)	{
 	mpz_add(num,num,value);
 	mpz_clear(value);
 }
-
+/*
 void Int::Add(const uint32_t u32)	{
 	mpz_add_ui(num,num,u32);
 }
+*/
 
 void Int::Add(const Int *a)	{
 	mpz_add(num,num,a->num);
@@ -83,9 +84,11 @@ void Int::Add(const Int *a,const Int *b)	{
 	mpz_add(num,a->num,b->num);
 }
 
+/*
 void Int::Sub(const uint32_t u32)	{
 	mpz_sub_ui(num,num,u32);
 }
+*/
 
 void Int::Sub(const uint64_t u64)	{
 	mpz_t value;
