@@ -8,4 +8,5 @@ default:
 	g++ -m64 -march=native -mtune=native -mssse3 -Wno-unused-result -Wno-write-strings -Ofast -ftree-vectorize -g -c SaveProgress.cpp -o SaveProgress.o -lgmp
 	g++ -m64 -march=native -mtune=native -mssse3 -Wno-unused-result -Wno-write-strings -Ofast -ftree-vectorize -g -o ReadFileSaveProgress ReadFileSaveProgress.cpp  util.o Int.o IntMod.o  Random.o IntGroup.o SaveProgress.o -lm -lpthread -lgmp
 	g++ -m64 -march=native -mtune=native -mssse3 -Wno-unused-result -Wno-write-strings -Ofast -ftree-vectorize -g -o testSaveProgress testSaveProgress.cpp  util.o Int.o IntMod.o  Random.o IntGroup.o SaveProgress.o -lm -lpthread -lgmp
+	g++ -m64 -march=native -mtune=native -mssse3 -Wno-unused-result -Wno-write-strings -Ofast -ftree-vectorize -g -o MergeFileProgress MergeFileProgress.cpp  util.o Int.o IntMod.o  Random.o IntGroup.o SaveProgress.o -lm -lpthread -lgmp
 	rm -r *.o

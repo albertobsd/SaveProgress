@@ -1,6 +1,6 @@
 /*
 	This class is an helper content to Save progress in disk
-	- Optionally in RAM at the same time
+	- Optionally in RAM at the same time for faster operations
 */
 
 #ifndef SAVEPROGRESS
@@ -48,6 +48,10 @@ class SaveProgress {
 		bool GetAndReserveNextRandomAvailable(Int *subrange);
 		void ShowHeaders();
 		void ShowProgress();
+		
+		void RemoveReservedUncompleted();
+		Int GetRangeStart();
+		Int GetRangeEnd();
 	
 	private:
 
@@ -124,6 +128,12 @@ class SaveProgress {
 		void CalculateRange(uint64_t offset,Int *range);
 		
 		void ReadVariablesFromFileName(const char *filename);
+		
+		void ReadReserved(uint8_t *buffer,uint64_t offset,int size);
+		void ReadComplete(uint8_t *buffer,uint64_t offset,int size);
+		void WriteReserved(uint8_t *buffer,uint64_t offset,int size);
+		void WriteComplete(uint8_t *buffer,uint64_t offset,int size);
+
 };
 
 

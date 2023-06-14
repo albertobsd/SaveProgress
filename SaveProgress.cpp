@@ -1268,6 +1268,7 @@ void SaveProgress::RemoveReservedUncompleted()	{
 	if(type == 1)	{
 		uint8_t bufferReserved[SAVEPROGRESS_BUFFER_LENGTH];
 		uint8_t bufferComplete[SAVEPROGRESS_BUFFER_LENGTH];
+		uint64_t offset;
 		int current_chunk_size;
 		int number_of_chunks = (int) (length/SAVEPROGRESS_BUFFER_LENGTH);
 		int last_chunk_size = length % SAVEPROGRESS_BUFFER_LENGTH;
@@ -1309,7 +1310,7 @@ void SaveProgress::RemoveReservedUncompleted()	{
 	}
 }
 
-void SaveProgress::ReadReserved(uint8_t buffer,uint64_t offset,int size)	{
+void SaveProgress::ReadReserved(uint8_t *buffer,uint64_t offset,int size)	{
 	if(save_ram)	{
 		memcpy(buffer,data_reserved + offset,size);
 	}
@@ -1325,7 +1326,7 @@ void SaveProgress::ReadReserved(uint8_t buffer,uint64_t offset,int size)	{
 	}
 }
 
-void SaveProgress::ReadComplete(uint8_t buffer,uint64_t offset,int size)	{
+void SaveProgress::ReadComplete(uint8_t *buffer,uint64_t offset,int size)	{
 	if(save_ram)	{
 		memcpy(buffer,data_complete + offset,size);
 	}
@@ -1341,7 +1342,7 @@ void SaveProgress::ReadComplete(uint8_t buffer,uint64_t offset,int size)	{
 	}
 }
 
-void SaveProgress::WriteReserved(uint8_t buffer,uint64_t offset,int size)	{
+void SaveProgress::WriteReserved(uint8_t *buffer,uint64_t offset,int size)	{
 	if(fseek(filedescriptor,OFFSET_FILE_DATASETS + offset,SEEK_SET) != 0)	{
 		printf("Failed to seek the file\n");
 		exit(EXIT_FAILURE);
@@ -1355,7 +1356,7 @@ void SaveProgress::WriteReserved(uint8_t buffer,uint64_t offset,int size)	{
 	}
 }
 
-void SaveProgress::WriteComplete(uint8_t buffer,uint64_t offset,int size)	{
+void SaveProgress::WriteComplete(uint8_t *buffer,uint64_t offset,int size)	{
 	if(fseek(filedescriptor,OFFSET_FILE_DATASETS + length + offset,SEEK_SET) != 0)	{
 		printf("Failed to seek the file\n");
 		exit(EXIT_FAILURE);
@@ -1367,4 +1368,14 @@ void SaveProgress::WriteComplete(uint8_t buffer,uint64_t offset,int size)	{
 	if(save_ram)	{
 		memcpy(data_complete + offset,buffer,size);
 	}
+}
+
+Int SaveProgress::GetRangeStart()	{
+	Int r(range_start);
+	return r;
+}
+
+Int SaveProgress::GetRangeEnd()	{
+	Int r(range_end);
+	return r;
 }
